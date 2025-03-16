@@ -37,7 +37,7 @@ public class MqClientImpl extends SimpleListener implements MqClient {
      * @param handler 消费处理
      */
     @Override
-    public void Subscribe(String topic, MqConsumerHandler handler) throws IOException {
+    public void subscribe(String topic, MqConsumerHandler handler) throws IOException {
         subscribeMap.put(topic, handler);
 
         session.send(MqConstants.MQ_EVENT_SUBSCRIBE, new StringEntity("").meta(MqConstants.MQ_META_TOPIC, topic));// 消费的元信息

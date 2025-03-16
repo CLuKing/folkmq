@@ -12,5 +12,5 @@ public interface MqConsumer {
      * @param topic  主题
      * @param handler 消费处理
      */
-    void Subscribe(String topic, MqConsumerHandler handler) throws IOException;
+    void subscribe(String topic, MqConsumerHandler handler) throws IOException;
 }
