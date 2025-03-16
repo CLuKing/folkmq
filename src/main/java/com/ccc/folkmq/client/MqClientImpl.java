@@ -6,17 +6,19 @@ import org.noear.socketd.SocketD;
 import org.noear.socketd.transport.core.Message;
 import org.noear.socketd.transport.core.Session;
 import org.noear.socketd.transport.core.entity.StringEntity;
+import org.noear.socketd.transport.core.listener.BuilderListener;
 import org.noear.socketd.transport.core.listener.SimpleListener;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 消息客户端   具体实现  消费者和生产者
  *
  */
-public class MqClientImpl extends SimpleListener implements MqClient {
+public class MqClientImpl extends BuilderListener implements MqClient {
 
     private String serverUrl;// 消息连接
     private Session session; // 会话
@@ -24,10 +26,17 @@ public class MqClientImpl extends SimpleListener implements MqClient {
 
 
     public MqClientImpl(String serverUrl) throws Exception{
-        this.serverUrl = serverUrl;
+//        this.serverUrl = serverUrl;// 修改一下请求头昵称
+//        this.serverUrl = serverUrl.replace("folkmq://", "sd:tcp://");// 修改一下请求头昵称
         this.session = SocketD.createClient(serverUrl)
                 .listen(this)
                 .open();
+
+        // 事件派发
+        on(MqConstants.MQ_EVENT_DISTRIBUTE,(s,m)->{
+            String topic = m.meta(MqConstants.MQ_META_TOPIC);
+            OnDistribute(topic,m.dataAsString());
+        });
     }
 
 
@@ -37,10 +46,16 @@ public class MqClientImpl extends SimpleListener implements MqClient {
      * @param handler 消费处理
      */
     @Override
-    public void subscribe(String topic, MqConsumerHandler handler) throws IOException {
+    public CompletableFuture<?> subscribe(String topic, MqConsumerHandler handler) throws IOException {
         subscribeMap.put(topic, handler);
 
-        session.send(MqConstants.MQ_EVENT_SUBSCRIBE, new StringEntity("").meta(MqConstants.MQ_META_TOPIC, topic));// 消费的元信息
+        //改为异步的方式，是否等待由用户选择
+        CompletableFuture<?> future = new CompletableFuture<>();
+        // 请求接口的订阅接口  有个回调值
+        session.sendAndSubscribe(MqConstants.MQ_EVENT_SUBSCRIBE, new StringEntity("").meta(MqConstants.MQ_META_TOPIC, topic),(r)->{
+            future.complete(null);
+        });// 消费的元信息
+        return future;
     }
 
     /**
@@ -49,23 +64,30 @@ public class MqClientImpl extends SimpleListener implements MqClient {
      * @param message  消息
      */
     @Override
-    public void publish(String topic, String message) throws IOException{
-        session.send(MqConstants.MQ_EVENT_PUBLISH, new StringEntity(message).meta(MqConstants.MQ_META_TOPIC, topic));// 消费的元信息
+    public CompletableFuture<?> publish(String topic, String message) throws IOException{
+
+        //改为异步的方式，是否等待由用户选择
+        CompletableFuture<?> future = new CompletableFuture<>();
+        // 请求接口的订阅接口  有个回调值
+        session.sendAndSubscribe(MqConstants.MQ_EVENT_PUBLISH, new StringEntity(message).meta(MqConstants.MQ_META_TOPIC, topic),(r)->{
+                    future.complete(null);
+        });// 消费的元信息
+        return future;
 
     }
 
     /**
-     * 接受回来的消息   通知回来
-     * @param session
+     * 接受回来的消息   通知回来  当派发时
+     * @param topic
      * @param message
      * @throws IOException
      */
-    @Override
-    public void onMessage(Session session, Message message) throws IOException {
-        String topic = message.meta(MqConstants.MQ_META_TOPIC);// 获取主题
+
+    public void OnDistribute(String topic, String message) throws IOException {
         MqConsumerHandler handler = subscribeMap.get(topic);// 消费处理器
+        System.out.printf("1111111");
         if (handler != null){
-            handler.handler(topic, message.dataAsString());// 消息进行处理
+            handler.handler(topic, message);// 消息进行处理
         }
     }
 }
